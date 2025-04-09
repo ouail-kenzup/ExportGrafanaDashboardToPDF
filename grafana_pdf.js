@@ -66,6 +66,10 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
 
         console.log("Navigating to URL...");
         await page.goto(finalUrl, {waitUntil: 'networkidle0'});
+        
+        //await page.waitForSelector('.panel-container', { timeout: 30000 });
+        await page.waitForTimeout(5000); // Give extra time for charts to render
+        
         console.log("Page loaded...");
 
         await page.evaluate(() => {
@@ -73,11 +77,25 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
             for (let el of infoCorners) {
                 el.hidden = true;
             }
+
+
+
+
             let resizeHandles = document.getElementsByClassName('react-resizable-handle');
             for (let el of resizeHandles) {
                 el.hidden = true;
             }
+        
+            // Add spacing between panels
+            const panels = document.querySelectorAll('.panel-container');
+            panels.forEach(panel => {
+                panel.style.marginBottom = '20px';
+                panel.style.position = 'relative'; // Ensure proper stacking
+            });
+        
         });
+
+
 
         let dashboardName = 'output_grafana';
         let date = new Date().toISOString().split('T')[0];
@@ -202,8 +220,19 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
         }
 
         const totalHeight = await page.evaluate(() => {
-            const scrollableSection = document.querySelector('.scrollbar-view');
-            return scrollableSection ? scrollableSection.firstElementChild.scrollHeight : null;
+            // Get all panels
+            const dashboard = document.querySelector('.react-grid-layout');
+            if (!dashboard) return null;
+            // Get the bottom-most panel position
+            const panels = dashboard.getElementsByClassName('react-grid-item');
+            let maxBottom = 0;
+            for (const panel of panels) {
+                const rect = panel.getBoundingClientRect();
+                const bottom = rect.top + rect.height;
+                maxBottom = Math.max(maxBottom, bottom);
+            }
+        // Add some padding at the bottom
+            return Math.ceil(maxBottom + 50);
         });
 
         if (!totalHeight) {
@@ -230,8 +259,15 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
         await page.setViewport({
             width: width_px,
             height: totalHeight,
-            deviceScaleFactor: 2,
+            deviceScaleFactor: 1,
             isMobile: false
+        });
+
+        await page.evaluate((totalHeight) => {
+        const dashboard = document.querySelector('.react-grid-layout');
+        if (dashboard) {
+            dashboard.style.height = `${totalHeight}px`;
+        }
         });
 
         console.log("Generating PDF...");
@@ -242,7 +278,8 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
             printBackground: true,
             scale: 1,
             displayHeaderFooter: false,
-            margin: {top: 0, right: 0, bottom: 0, left: 0}
+            margin: {top: 20, right: 20, bottom: 20, left: 20}, // Add margins
+            preferCSSPageSize: true
         });
         console.log(`PDF generated: ${outfile}`);
 
